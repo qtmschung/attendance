@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>員工考勤 | 前後台・Google Sheets・WhatsApp 分享</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(145deg, #f0f4f8 0%, #d9e2ec 100%);
+            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+            min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px;
+        }
+        .attendance-card {
+            max-width: 520px; width: 100%; background: #ffffff; border-radius: 2.5rem;
+            box-shadow: 0 30px 50px rgba(0,0,0,0.15); padding: 2rem 1.8rem; position: relative;
+        }
+        .admin-lock {
+            position: absolute; top: 1.2rem; right: 1.5rem; font-size: 1.4rem;
+            cursor: pointer; color: #94a3b8; transition: 0.2s;
+        }
+        .admin-lock:hover { color: #3b82f6; }
+        .admin-lock.active { color: #f59e0b; }
+
+        h1 { font-size: 2rem; font-weight: 600; color: #1e293b; margin-bottom: 0.3rem; }
+        .subtitle { color: #475569; margin-bottom: 1.2rem; font-weight: 500; font-size: 0.95rem; }
+
+        .settings-panel {
+            background: #f8fafc; border-radius: 1.2rem; padding: 1rem; margin-bottom: 1.2rem;
+            display: none; flex-direction: column; gap: 0.6rem;
+        }
+        .settings-panel.active { display: flex; }
+        .settings-panel input {
+            padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 0.8rem; font-size: 0.9rem;
+        }
+        .settings-panel label { font-weight: 600; color: #334155; font-size: 0.9rem; margin-top: 0.3rem; }
+        .settings-panel button {
+            background: #3b82f6; color: white; border: none; padding: 0.6rem; border-radius: 0.8rem;
+            font-weight: 600; cursor: pointer; margin-top: 0.3rem;
+        }
+
+        .employee-info {
+            background: #f1f5f9; border-radius: 1.5rem; padding: 1.2rem;
+            margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: 0.8rem;
+        }
+        .input-group {
+            display: flex; align-items: center; gap: 0.6rem; background: white;
+            border-radius: 1rem; padding: 0.5rem 1rem; box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        }
+        .input-group label { font-weight: 600; color: #334155; min-width: 55px; }
+        .input-group input { border: none; outline: none; font-size: 1rem; width: 100%; background: transparent; }
+        .remark-input {
+            background: white; border-radius: 1rem; padding: 0.5rem 1rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04); display: flex; align-items: center; gap: 0.6rem;
+        }
+        .remark-input label { font-weight: 600; color: #334155; white-space: nowrap; }
+        .remark-input input { border: none; outline: none; font-size: 1rem; width: 100%; background: transparent; }
+
+        .auto-share-option { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem; }
+        .auto-share-option input[type="checkbox"] { width: 18px; height: 18px; accent-color: #25D366; }
+        .auto-share-option label { font-weight: 500; color: #334155; }
+
+        .current-info {
+            background: #f1f5f9; border-radius: 1.5rem; padding: 1rem 1.2rem;
+            margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+        }
+        .date-text { font-weight: 700; font-size: 1.2rem; }
+        .time-text { font-weight: 700; font-size: 1.8rem; }
+        .location-badge {
+            background: white; border-radius: 2rem; padding: 0.5rem 1rem; font-size: 0.85rem;
+            max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .button-grid { display: flex; flex-direction: column; gap: 1rem; margin: 1.5rem 0; }
+        .attendance-btn {
+            border: none; padding: 1.2rem; border-radius: 2rem; font-size: 1.3rem;
+            font-weight: 600; display: flex; align-items: center; justify-content: center;
+            gap: 0.6rem; cursor: pointer; color: white;
+        }
+        .btn-start { background: #10b981; }
+        .btn-end { background: #ef4444; }
+        .btn-outwork { background: #f59e0b; }
+        .attendance-btn:active { transform: scale(0.97); }
+
+        .action-row { display: flex; gap: 0.8rem; margin: 0.8rem 0 0.5rem; flex-wrap: wrap; }
+        .action-row button {
+            flex: 1; min-width: 80px; color: white; border: none; padding: 0.8rem 0.5rem;
+            border-radius: 2rem; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+            box-shadow: 0 5px 12px rgba(0,0,0,0.2);
+        }
+        .whatsapp-btn { background: #25D366; }
+        .export-btn { background: #3b82f6; }
+        .sheet-btn { background: #8b5cf6; }
+
+        .record-panel { background: #f8fafc; border-radius: 1.5rem; padding: 1rem; margin-top: 1rem; }
+        .log-list { list-style: none; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
+        .log-item {
+            background: white; padding: 0.7rem; border-radius: 1rem; font-size: 0.8rem;
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+            border: 1px solid #e2e8f0;
+        }
+        .log-action { font-weight: 700; padding: 0.2rem 0.7rem; border-radius: 2rem; font-size: 0.7rem; }
+        .action-start { background: #d1fae5; color: #065f46; }
+        .action-end { background: #fee2e2; color: #991b1b; }
+        .action-outwork { background: #fef3c7; color: #92400e; }
+        .status-message { margin-top: 0.8rem; font-size: 0.9rem; color: #2563eb; text-align: center; min-height: 22px; }
+        .danger-btn {
+            background: transparent; border: 1px solid #cbd5e1; color: #64748b;
+            padding: 0.5rem; border-radius: 1rem; font-size: 0.8rem; cursor: pointer; width: 100%; margin-top: 0.5rem;
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+<div class="attendance-card">
+    <div class="admin-lock" id="adminLockBtn" title="管理員登入">🔒</div>
+
+    <h1>📋 員工考勤</h1>
+    <div class="subtitle" id="subtitleText">📌 填寫姓名電話・打卡・分享到 WhatsApp</div>
+
+    <!-- 管理員設定面板 (僅管理員可見) -->
+    <div class="settings-panel" id="settingsPanel">
+        <label>📲 WhatsApp 接收號碼 (帶國碼，例：85212345678)</label>
+        <input type="text" id="targetWhatsappInput" placeholder="例如: 85212345678">
+        <label>🔗 Google Apps Script URL</label>
+        <input type="text" id="scriptUrl" placeholder="Web App URL">
+        <label>📊 Google Sheet 共用連結</label>
+        <input type="text" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+        <button id="saveSettingsBtn">💾 儲存設定</button>
+    </div>
+
+    <div class="employee-info">
+        <div class="input-group">
+            <label>👤 姓名</label>
+            <input type="text" id="employeeName" placeholder="輸入姓名" autocomplete="name">
+        </div>
+        <div class="input-group">
+            <label>📞 電話</label>
+            <input type="tel" id="employeePhone" placeholder="輸入電話號碼" autocomplete="tel">
+        </div>
+        <div class="remark-input">
+            <label>📝 備註</label>
+            <input type="text" id="remarkInput" placeholder="出勤時必填 (例：XX公司開會)">
+        </div>
+    </div>
+
+    <div class="auto-share-option">
+        <input type="checkbox" id="autoShareCheckbox" checked>
+        <label for="autoShareCheckbox">📲 打卡後自動打開 WhatsApp 分享</label>
+    </div>
+
+    <div class="current-info">
+        <div>
+            <div class="date-text" id="displayDate">--</div>
+            <div class="time-text" id="displayTime">--:--</div>
+        </div>
+        <div class="location-badge" id="locationDisplay" title="點擊查看完整地址">⏳ 定位中...</div>
+    </div>
+
+    <div class="button-grid">
+        <button class="attendance-btn btn-start" id="btnStart">🔵 上班</button>
+        <button class="attendance-btn btn-end" id="btnEnd">🔴 下班</button>
+        <button class="attendance-btn btn-outwork" id="btnOutwork">🟠 出勤</button>
+    </div>
+
+    <div class="action-row" id="actionRow">
+        <button class="whatsapp-btn" id="btnShareWhatsApp">📲 分享最後記錄</button>
+        <button class="export-btn" id="btnExport">📥 匯出 CSV</button>
+        <button class="sheet-btn admin-only hidden" id="btnOpenSheet">📊 Google 總表</button>
+    </div>
+
+    <div class="record-panel">
+        <div style="font-weight:700; margin-bottom:0.5rem;">🕒 最近打卡記錄</div>
+        <ul class="log-list" id="logContainer"><li style="color:#94a3b8; text-align:center;">尚無記錄</li></ul>
+    </div>
+    
+    <button class="danger-btn" id="btnClearLogs">🗑️ 清除所有記錄</button>
+    <div class="status-message" id="statusMessage"></div>
+</div>
+
+<script>
+    (function() {
+        const ADMIN_PASSWORD = 'admin123';
+        let isAdmin = false;
+
+        const adminLockBtn = document.getElementById('adminLockBtn');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const subtitleText = document.getElementById('subtitleText');
+        const btnOpenSheet = document.getElementById('btnOpenSheet');
+
+        const nameInput = document.getElementById('employeeName');
+        const phoneInput = document.getElementById('employeePhone');
+        const remarkInput = document.getElementById('remarkInput');
+        const displayDate = document.getElementById('displayDate');
+        const displayTime = document.getElementById('displayTime');
+        const locationDisplay = document.getElementById('locationDisplay');
+        const btnStart = document.getElementById('btnStart');
+        const btnEnd = document.getElementById('btnEnd');
+        const btnOutwork = document.getElementById('btnOutwork');
+        const btnExport = document.getElementById('btnExport');
+        const btnShareWhatsApp = document.getElementById('btnShareWhatsApp');
+        const btnClear = document.getElementById('btnClearLogs');
+        const logContainer = document.getElementById('logContainer');
+        const statusMessage = document.getElementById('statusMessage');
+        const autoShareCheckbox = document.getElementById('autoShareCheckbox');
+        
+        // Admin 設定欄位
+        const targetWhatsappInput = document.getElementById('targetWhatsappInput');
+        const scriptUrlInput = document.getElementById('scriptUrl');
+        const sheetUrlInput = document.getElementById('sheetUrl');
+        const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+
+        const STORAGE_KEY = 'emp_attendance_v6';
+        const PROFILE_KEY = 'emp_profile';
+        const SETTINGS_KEY = 'emp_settings';
+        let attendanceLogs = [];
+        let currentPosition = { latitude: null, longitude: null, address: null, error: null };
+
+        // 管理員切換
+        function toggleAdmin() {
+            if (isAdmin) {
+                isAdmin = false;
+                adminLockBtn.textContent = '🔒';
+                adminLockBtn.classList.remove('active');
+                settingsPanel.classList.remove('active');
+                btnOpenSheet.classList.add('hidden');
+                subtitleText.textContent = '📌 填寫姓名電話・打卡・分享到 WhatsApp';
+            } else {
+                const pw = prompt('請輸入管理員密碼：');
+                if (pw === ADMIN_PASSWORD) {
+                    isAdmin = true;
+                    adminLockBtn.textContent = '🔓';
+                    adminLockBtn.classList.add('active');
+                    settingsPanel.classList.add('active');
+                    btnOpenSheet.classList.remove('hidden');
+                    subtitleText.textContent = '🔧 管理員模式・Google Sheets 同步';
+                } else if (pw !== null) {
+                    alert('密碼錯誤！');
+                }
+            }
+        }
+        adminLockBtn.addEventListener('click', toggleAdmin);
+
+        // 資料處理
+        function loadLogs() {
+            try { attendanceLogs = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { attendanceLogs = []; }
+        }
+        function saveLogs() { localStorage.setItem(STORAGE_KEY, JSON.stringify(attendanceLogs)); }
+
+        function loadProfile() {
+            try {
+                const p = JSON.parse(localStorage.getItem(PROFILE_KEY));
+                if (p) { nameInput.value = p.name || ''; phoneInput.value = p.phone || ''; }
+            } catch(e){}
+        }
+        function saveProfile() {
+            localStorage.setItem(PROFILE_KEY, JSON.stringify({ name: nameInput.value.trim(), phone: phoneInput.value.trim() }));
+        }
+        nameInput.addEventListener('input', saveProfile);
+        phoneInput.addEventListener('input', saveProfile);
+
+        // 載入與儲存管理員設定
+        function loadSettings() {
+            try {
+                const s = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+                if (s) {
+                    targetWhatsappInput.value = s.targetWhatsapp || '';
+                    scriptUrlInput.value = s.scriptUrl || ''; 
+                    sheetUrlInput.value = s.sheetUrl || ''; 
+                }
+            } catch(e){}
+        }
+        function saveAllSettings() {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+                targetWhatsapp: targetWhatsappInput.value.trim(),
+                scriptUrl: scriptUrlInput.value.trim(),
+                sheetUrl: sheetUrlInput.value.trim()
+            }));
+            statusMessage.textContent = '✅ 設定已儲存';
+        }
+        saveSettingsBtn.addEventListener('click', saveAllSettings);
+
+        function getEmployeeInfo() {
+            return { name: nameInput.value.trim(), phone: phoneInput.value.trim(), remark: remarkInput.value.trim() };
+        }
+
+        function validateEmployee() {
+            const {name, phone} = getEmployeeInfo();
+            if (!name) { statusMessage.textContent = '⚠️ 請輸入員工姓名'; return false; }
+            if (!phone || !/^\d{7,11}$/.test(phone)) { 
+                statusMessage.textContent = '⚠️ 請輸入有效電話號碼 (7-11位數字)'; return false; 
+            }
+            return true;
+        }
+
+        function renderLogs() {
+            if (attendanceLogs.length === 0) {
+                logContainer.innerHTML = '<li style="color:#94a3b8; text-align:center;">尚無記錄</li>';
+                return;
+            }
+            const recent = [...attendanceLogs].reverse().slice(0, 5);
+            logContainer.innerHTML = recent.map(log => {
+                let actionClass = log.type === '上班' ? 'action-start' : log.type === '下班' ? 'action-end' : 'action-outwork';
+                return `<li class="log-item">
+                    <span class="log-action ${actionClass}">${log.type}</span>
+                    <span style="font-weight:500;">${log.employeeName}</span>
+                    <span style="font-size:0.7rem;">${log.timestamp}</span>
+                    <span style="font-size:0.65rem; color:#64748b;">📞${log.employeePhone}</span>
+                    ${log.remark ? `<span style="font-size:0.65rem; color:#475569; width:100%;">📝${log.remark}</span>` : ''}
+                </li>`;
+            }).join('');
+        }
+
+        function updateDateTime() {
+            const now = new Date();
+            displayDate.textContent = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} 星期${['日','一','二','三','四','五','六'][now.getDay()]}`;
+            displayTime.textContent = now.toTimeString().split(' ')[0];
+        }
+
+        function getTimestamp() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${now.toTimeString().split(' ')[0]}`;
+        }
+
+        function getLocationStr() {
+            if (currentPosition.address) return currentPosition.address;
+            if (currentPosition.latitude) return `${currentPosition.latitude.toFixed(4)},${currentPosition.longitude.toFixed(4)}`;
+            return '定位中';
+        }
+
+        function updateLocationDisplay() {
+            const addr = getLocationStr();
+            locationDisplay.textContent = addr.length > 25 ? addr.substring(0,22)+'…' : addr;
+            locationDisplay.title = addr;
+        }
+
+        function requestLocation() {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(pos => {
+                currentPosition.latitude = pos.coords.latitude;
+                currentPosition.longitude = pos.coords.longitude;
+                fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&accept-language=zh-HK`, {
+                    headers: { 'User-Agent': 'AttendanceApp/1.0' }
+                })
+                .then(r=>r.json())
+                .then(data => {
+                    currentPosition.address = data?.display_name || `${pos.coords.latitude.toFixed(4)},${pos.coords.longitude.toFixed(4)}`;
+                    updateLocationDisplay();
+                }).catch(() => {
+                    currentPosition.address = `${pos.coords.latitude.toFixed(4)},${pos.coords.longitude.toFixed(4)}`;
+                    updateLocationDisplay();
+                });
+            }, err => {}, { enableHighAccuracy:true, timeout:8000 });
+        }
+
+        async function sendToGoogleSheet(record) {
+            const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+            if (!settings || !settings.scriptUrl) return;
+            try {
+                await fetch(settings.scriptUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(record)
+                });
+            } catch (e) {}
+        }
+
+        function addRecord(type) {
+            if (!validateEmployee()) return;
+            const {name, phone, remark} = getEmployeeInfo();
+            if (type === '出勤' && !remark) {
+                statusMessage.textContent = '⚠️ 出勤必須填寫備註（公司/地點）';
+                return;
+            }
+            const record = {
+                employeeName: name,
+                employeePhone: phone,
+                type: type,
+                timestamp: getTimestamp(),
+                location: getLocationStr(),
+                remark: type === '出勤' ? remark : '',
+                lat: currentPosition.latitude,
+                lng: currentPosition.longitude
+            };
+            attendanceLogs.push(record);
+            saveLogs();
+            renderLogs();
+            statusMessage.textContent = `✅ ${name} ${type} 打卡成功`;
+            sendToGoogleSheet(record);
+            if (autoShareCheckbox.checked) {
+                setTimeout(() => shareRecord(record), 300);
+            }
+            remarkInput.value = '';
+        }
+
+        function generateShareMessage(record) {
+            let msg = `📋 員工打卡通知\n👤 姓名：${record.employeeName}\n📞 電話：${record.employeePhone}\n🏷️ 類型：${record.type}\n🕒 時間：${record.timestamp}\n📍 地點：${record.location}`;
+            if (record.remark) msg += `\n📝 備註：${record.remark}`;
+            return msg;
+        }
+
+        // 動態獲取管理員設定的 WhatsApp 號碼發送
+        function shareRecord(record) {
+            const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+            const targetWhatsapp = settings?.targetWhatsapp || '';
+
+            const msg = generateShareMessage(record);
+            // 若有設定指定號碼則帶入 wa.me/號碼，若未設定則打開通用分享連結 wa.me/?text=...
+            const url = targetWhatsapp 
+                ? `https://wa.me/${targetWhatsapp}?text=${encodeURIComponent(msg)}`
+                : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+            const w = window.open(url, '_blank');
+            
+            if (!w) {
+                navigator.clipboard.writeText(msg).then(() => {
+                    statusMessage.textContent = '📋 訊息已複製，請手動貼上到 WhatsApp';
+                });
+            } else {
+                statusMessage.textContent = targetWhatsapp 
+                    ? `📲 已自動開啟 WhatsApp 分享至 ${targetWhatsapp}` 
+                    : '📲 已自動開啟 WhatsApp';
+            }
+        }
+
+        function shareLastRecord() {
+            if (attendanceLogs.length === 0) { statusMessage.textContent = '⚠️ 無記錄可分享'; return; }
+            shareRecord(attendanceLogs[attendanceLogs.length-1]);
+        }
+
+        function exportToCSV() {
+            if (attendanceLogs.length === 0) { statusMessage.textContent = '⚠️ 無記錄可匯出'; return; }
+            const headers = ['姓名','電話','類型','時間','地址','備註','緯度','經度'];
+            const rows = attendanceLogs.map(log => [
+                log.employeeName, log.employeePhone, log.type, log.timestamp,
+                log.location, log.remark || '', log.lat, log.lng
+            ]);
+            const csv = [headers, ...rows].map(r => r.map(f => `"${String(f).replace(/"/g,'""')}"`).join(',')).join('\n');
+            const blob = new Blob(['\uFEFF'+csv], {type:'text/csv'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = `考勤_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+        }
+
+        function openGoogleSheet() {
+            const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+            if (settings?.sheetUrl) window.open(settings.sheetUrl, '_blank');
+            else statusMessage.textContent = '⚠️ 請先設定 Google Sheet 連結';
+        }
+
+        // 事件綁定
+        btnStart.addEventListener('click', () => addRecord('上班'));
+        btnEnd.addEventListener('click', () => addRecord('下班'));
+        btnOutwork.addEventListener('click', () => addRecord('出勤'));
+        btnExport.addEventListener('click', exportToCSV);
+        btnShareWhatsApp.addEventListener('click', shareLastRecord);
+        btnOpenSheet.addEventListener('click', openGoogleSheet);
+        btnClear.addEventListener('click', () => {
+            if (confirm('清除所有記錄？')) { attendanceLogs = []; saveLogs(); renderLogs(); }
+        });
+
+        // 初始化
+        loadLogs(); loadProfile(); loadSettings(); renderLogs();
+        updateDateTime(); setInterval(updateDateTime, 1000);
+        requestLocation(); setInterval(requestLocation, 300000);
+        isAdmin = false;
+        adminLockBtn.textContent = '🔒';
+        settingsPanel.classList.remove('active');
+        btnOpenSheet.classList.add('hidden');
+    })();
+</script>
+</body>
+</html>
